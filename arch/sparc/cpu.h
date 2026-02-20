@@ -1,5 +1,7 @@
 #pragma once
 
+//  게스트 아키텍처 (SPARC) 정의 파일이다.
+
 #if (TARGET_LONG_BITS == 32)
 #ifdef TARGET_PHYS_ADDR_BITS
 #undef TARGET_PHYS_ADDR_BITS
@@ -247,14 +249,25 @@ typedef struct sparc_def_t {
 #define SFSR_CT_NOTRANS   (3ULL << 4)
 #define SFSR_CT_MASK      (3ULL << 4)
 
+//  SPARC 아키텍처 guest 블록의 기본 정보를 담는다.
+//  "번역 도중"에 사용된다.
 typedef struct DisasContext {
-    struct DisasContextBase base;
-    target_ulong jump_pc[2]; /* used when JUMP_PC pc value is used */
-    int fpu_enabled;
-    int address_mask_32bit;
-    uint32_t cc_op; /* current CC operation */
-    sparc_def_t *def;
-    target_ulong npc;
+    struct DisasContextBase base;  //  모든 아키텍처의 guest 블록의 기본 정보
+    /*
+     * 일반 명령어가 아닌 분기 명령어인 경우 사용된다.
+     * jump_pc[0] 에는 조건이 맞는 경우의 타겟 주소, jump_pc[1] 에는 조건이 틀린 경우의 다음 주소가 들어간다.
+     * jump_pc[1] 에는 PC + 8 의 값이 들어간다. delay slot 을 무시해야 하기 때문이다.
+     * npc 변수에는 JUMP_PC (2) 라는 상수 값으로 설정한다.
+     */
+    target_ulong jump_pc[2];
+    int fpu_enabled;         //  번역 중인 현재, CPU 의 FPU 가 켜져 있는가를 PSR 를 통해 가져오는 변수
+    int address_mask_32bit;  //  32비트 모드일 때, 나머지 상위 32비트를 무시하게 만들기 위한 마스크
+    //  나중에 분기문 나왔을 때의 최신 NVCZ 값으로 업데이트하기 위한 변수
+    //  사실상 분기문 나오기 전까지의 NVCZ 만 가지고 있으면 되기 때문에, 최적화를 위해 그 전의 NVCZ 값은 변수에 저장해놓는다.
+    //  0xFFFFFFFF (0000 0000 0000 0000 1111 1111 1111 1111) 와 AND 연산 수행
+    uint32_t cc_op;    /* current CC operation */
+    sparc_def_t *def;  //  SPARC 의 상세 모델 정의
+    target_ulong npc;  //  target_ulong 에 대한 정보는 cpu-defs.h 참조
 } DisasContext;
 
 typedef struct SparcTLBEntry {

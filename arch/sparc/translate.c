@@ -1486,6 +1486,8 @@ static int disas_insn(CPUState *env, DisasContext *dc)
 
     insn = ldl_code(dc->base.pc);
 
+    //  여기서 1사이클 올린다.
+    //  NOP 관련 명령어면 아무 것도 안하는 것과는 별개로, 사이클은 1 증가된다.
     if(env->count_opcodes) {
         generate_opcode_count_increment(env, insn);
     }
@@ -1527,7 +1529,7 @@ static int disas_insn(CPUState *env, DisasContext *dc)
                     goto jmp_insn;
                 }
                 case 0x4:     /* SETHI */
-                    if(rd) {  //  nop
+                    if(rd) {  //  일반 연산일 때
                         uint32_t value = GET_FIELD(insn, 10, 31);
                         TCGv r_const;
 
@@ -1535,6 +1537,11 @@ static int disas_insn(CPUState *env, DisasContext *dc)
                         gen_movl_TN_reg(rd, r_const);
                         tcg_temp_free(r_const);
                     }
+                    /*
+                     * NOP 동작은 SETHI %g0, 0 이다.
+                     * destination register 의 값이 0 인 경우, 즉 %g0 레지스터인 경우 NOP 로 간주한다.
+                     * if 문에 안 들어갈 때가 NOP 이므로, 아무 동작도 안 한다.
+                     */
                     break;
                 case 0x0: /* UNIMPL */
                 default:

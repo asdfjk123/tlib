@@ -16,6 +16,9 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
+
+//  게스트, 호스트 불문 모든 아키텍처가 공통으로 갖는 특징 또는 정보를 정의하는 파일이라고 보면 된다.
+//  아키텍처가 사용하는 자료형에 대해 C 코드 관점에서 재정의하거나, 에뮬레이팅에 필요한 변수들을 정의한다.
 #pragma once
 
 #include <setjmp.h>
@@ -257,7 +260,7 @@ enum block_interrupt_cause {
     int block_begin_hook_present;                                             \
     int sync_pc_every_instruction_disabled;                                   \
     int cpu_wfi_state_change_hook_present;                                    \
-    uint32_t millicycles_per_instruction;                                     \
+    uint32_t millicycles_per_instruction;  /* 명령어 하나 당 밀리 사이클 */         \
     int interrupt_begin_callback_enabled;                                     \
     int interrupt_end_callback_enabled;                                       \
     int32_t tlib_is_on_memory_access_enabled;                                 \

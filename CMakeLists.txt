@@ -1,3 +1,7 @@
+# cmakelist 파일을 통해, 빌드 환경에 따라 다르게 설정 가능
+# 변수 및 기타 정보를 여기서 정의함으로써, 빌드 시 전역적으로 코드에 적용 가능
+# 코드 수정할 필요 없이 여기서 수정하면 됨
+
 cmake_minimum_required(VERSION 3.12)
 
 project (tlib LANGUAGES C)
@@ -192,7 +196,7 @@ add_definitions (
 
     -DTARGET_${TARGET_ACTUAL_ARCH_U}=1
 
-    -DTARGET_SHORT_ALIGNMENT=2
+    -DTARGET_SHORT_ALIGNMENT=2 
     -DTARGET_INT_ALIGNMENT=4
     -DTARGET_LONG_ALIGNMENT=4
     -DTARGET_LLONG_ALIGNMENT=4
