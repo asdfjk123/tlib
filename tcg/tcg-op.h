@@ -217,6 +217,9 @@ static inline void tcg_gen_op0(const TCGOpcode opc)
     *gen_opc_ptr++ = tcg_create_opcode_entry(opc);
 }
 
+//  함수 명명 방식
+//  op1 -> 인자를 1개 받는다.
+//  i32 -> integer 32bit 데이터를 다룬다.
 static inline void tcg_gen_op1_i32(TCGOpcode opc, TCGv_i32 arg1)
 {
     tcg_gen_op0(opc);
