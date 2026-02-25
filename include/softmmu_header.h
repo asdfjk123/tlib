@@ -1,4 +1,4 @@
-/*
+/*  glue 함수를 통해, 메모리 접근 관련 함수를 매크로로 제작하는 파일
  *  Software MMU support
  *
  *  Copyright (c) 2003 Fabrice Bellard
@@ -70,8 +70,15 @@
 #define ADDR_READ addr_read
 #endif
 
-/* generic load/store macros */
+//  glue 함수란, 빌드 중 전처리 단계에 함수를 생성해주는 매크로 함수이다.
+//  접두어와 접미어를 통해 함수명을 제작한다고 해서 glue 라는 이름이 붙었다.
+//  데이터 크기, 부호 여부, 접근 주체 등등 수많은 경우의 수가 존재하기 때문에, 템플릿 프로그래밍을 통해 자동으로 코드가 생성되도록
+//  만든 것이다.
+//  glue 함수는 기본적으로 2개의 파라미터만 받도록 정의되어 있다. QEMU/tlib 부분 참조하면 #define glue(x, y) x ## y
+//  라고 되어있다. 따라서 3개 이상의 파라미터를 받으려면 glue(glue(x,y), z) 이런 식으로 사용해야 한다.
 
+/* generic load/store macros */
+//  TLB 캐시 체크와 메모리 접근 로직을 만드는 매크로 함수
 static inline RES_TYPE glue(glue(glue(glue(ld, USUFFIX), _err), MEMSUFFIX), _inner)(target_ulong ptr, int *err, void *retaddr)
 {
     int page_index;
@@ -110,11 +117,14 @@ static inline RES_TYPE glue(glue(glue(ld, USUFFIX), MEMSUFFIX), _inner)(target_u
 
 static inline RES_TYPE glue(glue(ld, USUFFIX), MEMSUFFIX)(target_ulong ptr)
 {
-#ifdef IS_INS_FETCH
+#ifdef IS_INS_FETCH  //  여기서 ldl_code 가 생성된다.
     //  Instruction fetch loads can't fault
+    //  return 에 NULL 을 넣는 이유는, 아직 명령어 실행 전이기 때문에 복귀 주소를 넣을 필요가 없기 때문이다.
     return glue(glue(glue(ld, USUFFIX), MEMSUFFIX), _inner)(ptr, NULL);
-#else
-    void *retaddr = GETPC();
+
+#else  //  일반 데이터 읽기 쓰기에 대한 함수 ldl_kernel (helper function) 생성
+    void *retaddr = GETPC();  //  어느 명령어 시점에서 helper function 으로 들어왔는지 알 수 있다.
+    //  이 때는 복귀 주소에 retaddr 을 넣어준다.
     return glue(glue(glue(ld, USUFFIX), MEMSUFFIX), _inner)(ptr, retaddr);
 #endif
 }

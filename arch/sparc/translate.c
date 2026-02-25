@@ -97,6 +97,7 @@ void translate_init()
 }
 
 //  This function uses non-native bit order
+//  from 부터 to 까지의 명령어 부분을 읽어온다. op, rs1, rs2 등의 값을 읽어올 수 있다.
 #define GET_FIELD(X, FROM, TO) ((X) >> (31 - (TO)) & ((1 << ((TO) - (FROM) + 1)) - 1))
 
 //  This function uses the order in the manuals, i.e. bit 0 is 2^0
@@ -1478,13 +1479,21 @@ static inline void generate_stack_frame_announcement(DisasContext *dc, int type)
 }
 
 /* before an instruction, dc->base.pc must be static */
+//  번역을 담당하는 함수
+//  dc -> 현재 번역하고 있는 블록 정보
 static int disas_insn(CPUState *env, DisasContext *dc)
 {
     unsigned int insn, opc, rs1, rs2, rd;
     TCGv cpu_src1, cpu_src2, cpu_tmp1, cpu_tmp2;
     target_long simm;
 
-    insn = ldl_code(dc->base.pc);
+    insn = ldl_code(dc->base.pc);  //  load long from code
+    /*
+     * 현재 명령어를 로드하는 함수
+     * 캐싱이 되어 있으면 TLB 테이블을 통해 캐시로부터 가져오고, 아니면 메모리에서 가져온다.
+     * ldl_code 는 tlib/include/softmmu_header.h 로부터 SUFFIX 와 MEMSUFFIX 를 통해 함수명이 매크로로 만들어진다.
+     * 내부 구현은 glue() 를 통해서 만들어진다.
+     */
 
     //  여기서 1사이클 올린다.
     //  NOP 관련 명령어면 아무 것도 안하는 것과는 별개로, 사이클은 1 증가된다.
@@ -2376,28 +2385,39 @@ static int disas_insn(CPUState *env, DisasContext *dc)
         } break;
         case 3: /* load/store instructions */
         {
+            //  extended opcode
+            //  하위 명령어를 구분하기 위한 op3 필드의 값을 꺼내온다.
             unsigned int xop = GET_FIELD(insn, 7, 12);
 
             /* flush pending conditional evaluations before exposing
                cpu state */
-            if(dc->cc_op != CC_OP_FLAGS) {
-                dc->cc_op = CC_OP_FLAGS;
-                gen_helper_compute_psr();
+            //  상태값 지연 평가 로직
+            //  메모리 트랩 발생에 대비하기 위해 PSR 값을 이 때 반영한다.
+            if(dc->cc_op != CC_OP_FLAGS) {  //  플래그값이 반영되지 않은 경우
+                dc->cc_op = CC_OP_FLAGS;    //  플래그값 반영되었다는 상태로 바꾸고
+                gen_helper_compute_psr();   //  PSR 에 플래그값을 실제로 반영한다.
+                //  src/Infrastructure/src/Emulator/Cores/tlib/arch/sparc/helper.h 에서 매크로로 제작됨
             }
+
+            //  rs1, rs2, rd 를 안 쓰고 cpu_src1, cpu_src2, cpu_dst 를 사용하는 이유
+            //  rs1, rs2, rd 를 출력해보면 1, 2, 3 같은 숫자값이 나온다.
+            //  호스트 입장에서는 게스트 아키텍처의 레지스터의 실제 호스트에서의 메모리 주소를 알고 싶다.
+            //  따라서 호스트 메모리 상의 주소를 넘겨주기 위해 get_src1 함수를 통해 주소를 넘겨받는 것이다.
             cpu_src1 = get_src1(insn, cpu_src1);
             if(xop == 0x3c || xop == 0x3e) {
                 rs2 = GET_FIELD(insn, 27, 31);
                 gen_movl_reg_TN(rs2, cpu_src2);
                 tcg_gen_mov_tl(cpu_addr, cpu_src1);
             } else if(IS_IMM) { /* immediate */
+                //  ld 명령어가 [%a + 0], %b 이런 식일 때는 simm 값을 사용하기 때문에, immediate 값을 추출한다.
                 simm = GET_FIELDs(insn, 19, 31);
-                tcg_gen_addi_tl(cpu_addr, cpu_src1, simm);
-            } else { /* register */
-                rs2 = GET_FIELD(insn, 27, 31);
+                tcg_gen_addi_tl(cpu_addr, cpu_src1, simm);  //  %a 에 0 을 더하는 작업 수행
+            } else {                                        /* register */
+                rs2 = GET_FIELD(insn, 27, 31);              //  27 ~ 31 비트 사이에서 rs2 값 가져온다.
                 if(rs2 != 0) {
                     gen_movl_reg_TN(rs2, cpu_src2);
                     tcg_gen_add_tl(cpu_addr, cpu_src1, cpu_src2);
-                } else {
+                } else {  //  rs2 값이 0이라면 더하기 연산을 제외하도록 최적화
                     tcg_gen_mov_tl(cpu_addr, cpu_src1);
                 }
             }

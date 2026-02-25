@@ -289,8 +289,9 @@ void append_dirty_address(uint64_t address);
 #include "softmmu_defs.h"
 
 #define ACCESS_TYPE (NB_MMU_MODES + 1)
-#define MEMSUFFIX   _code
-#define env         cpu
+#define MEMSUFFIX   _code  //  메모리 접근하는 함수에 붙이는 접미사이다.
+//  여기서는 PC 를 통해 코드를 읽어오는데만 관련이 있어서 _code 라고 명명함.
+#define env cpu
 
 #define DATA_SIZE 1
 #include "softmmu_header.h"
@@ -298,7 +299,7 @@ void append_dirty_address(uint64_t address);
 #define DATA_SIZE 2
 #include "softmmu_header.h"
 
-#define DATA_SIZE 4
+#define DATA_SIZE 4  //  4 bytes (32 bits) 명령어 전용 매크로 함수 제작
 #include "softmmu_header.h"
 
 #define DATA_SIZE 8

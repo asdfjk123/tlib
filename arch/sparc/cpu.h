@@ -70,18 +70,25 @@
 #define CC_OP   (env->cc_op)
 
 enum {
+    /* QEMU tlib 의 경우, 상태 플래그를 매번 레지스터에 넣지 않는다.
+     * 대신 어떤 연산을 했다는 정보만 cpu_cc_op, cpu_cc_src, cpu_cc_dst 에 저장해놓는다.
+     * 이를 지연 평가라고 한다.
+     * 분기문 또는 메모리 트랩 발생 직전에서야 플래그를 PSR 에 반영한다.
+     * gen_helper_compute_psr() 을 사용한다.
+     */
     CC_OP_DYNAMIC, /* must use dynamic code to get cc_op */
-    CC_OP_FLAGS,   /* all cc are back in status register */
-    CC_OP_DIV,     /* modify N, Z and V, C = 0*/
-    CC_OP_ADD,     /* modify all flags, CC_DST = res, CC_SRC = src1 */
-    CC_OP_ADDX,    /* modify all flags, CC_DST = res, CC_SRC = src1 */
-    CC_OP_TADD,    /* modify all flags, CC_DST = res, CC_SRC = src1 */
-    CC_OP_TADDTV,  /* modify all flags except V, CC_DST = res, CC_SRC = src1 */
-    CC_OP_SUB,     /* modify all flags, CC_DST = res, CC_SRC = src1 */
-    CC_OP_SUBX,    /* modify all flags, CC_DST = res, CC_SRC = src1 */
-    CC_OP_TSUB,    /* modify all flags, CC_DST = res, CC_SRC = src1 */
-    CC_OP_TSUBTV,  /* modify all flags except V, CC_DST = res, CC_SRC = src1 */
-    CC_OP_LOGIC,   /* modify N and Z, C = V = 0, CC_DST = res */
+    CC_OP_FLAGS,
+    /* all cc are back in status register */ /* 상태 플래그가 PSR 레지스터에 기록된 상태 */
+    CC_OP_DIV,                               /* modify N, Z and V, C = 0*/
+    CC_OP_ADD,                               /* modify all flags, CC_DST = res, CC_SRC = src1 */
+    CC_OP_ADDX,                              /* modify all flags, CC_DST = res, CC_SRC = src1 */
+    CC_OP_TADD,                              /* modify all flags, CC_DST = res, CC_SRC = src1 */
+    CC_OP_TADDTV,                            /* modify all flags except V, CC_DST = res, CC_SRC = src1 */
+    CC_OP_SUB,                               /* modify all flags, CC_DST = res, CC_SRC = src1 */
+    CC_OP_SUBX,                              /* modify all flags, CC_DST = res, CC_SRC = src1 */
+    CC_OP_TSUB,                              /* modify all flags, CC_DST = res, CC_SRC = src1 */
+    CC_OP_TSUBTV,                            /* modify all flags except V, CC_DST = res, CC_SRC = src1 */
+    CC_OP_LOGIC,                             /* modify N and Z, C = V = 0, CC_DST = res */
     CC_OP_NB,
 };
 

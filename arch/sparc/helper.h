@@ -1,5 +1,9 @@
 #include "def-helper.h"
 
+/*
+ * helper function 매크로 생성 파일 (SPARC 전용)
+ */
+
 DEF_HELPER_0(power_down, void)
 DEF_HELPER_0(rett, void)
 DEF_HELPER_1(wrpsr, void, tl)
@@ -73,6 +77,6 @@ DEF_HELPER_0(fqtoi, s32)
 #undef F_HELPER_DQ_0_0
 #undef VIS_HELPER
 #undef VIS_CMPHELPER
-DEF_HELPER_0(compute_psr, void);
+DEF_HELPER_0(compute_psr, void);  //  gen_compute_psr 이라는, 0개의 인자를 받는 함수를 만든다.
 DEF_HELPER_0(compute_C_icc, i32);
 #include "def-helper.h"
