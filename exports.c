@@ -356,24 +356,27 @@ void tlib_on_leaving_reset_state()
 
 EXC_VOID_0(tlib_on_leaving_reset_state)
 
+//  번역의 진짜 시작점 함수
 int32_t tlib_execute(uint32_t max_insns)
 {
-    if(cpu->instructions_count_value != 0) {
+    if(cpu->instructions_count_value != 0) {  //  0 으로 초기화가 안 되어 있는 경우 = instruction count 를 파악하지 못한 경우
         tlib_abortf("Tried to execute cpu without reading executed instructions count first.");
     }
-    cpu->instructions_count_limit = max_insns;
+    cpu->instructions_count_limit =
+        max_insns;  //  점프/분기 명령어가 나올 떄까지 너무 길어질 경우를 대비하여, 블록 최대 사이즈 지정
 
     uint32_t local_counter = 0;
     int32_t result = EXCP_INTERRUPT;
-    while((result == EXCP_INTERRUPT) && (cpu->instructions_count_limit > 0)) {
-        result = cpu_exec(cpu);
+    while((result == EXCP_INTERRUPT) &&
+          (cpu->instructions_count_limit > 0)) {  //  명령어 블록 최대 개수 넘지 않는 동안 또는 무시해도 되는 인터럽트인 경우
+        result = cpu_exec(cpu);                   //  번역 실행
 
-        cpu_sync_instructions_count(cpu);
+        cpu_sync_instructions_count(cpu);  //  instruction count 동기화
         local_counter += cpu->instructions_count_value;
-        cpu->instructions_count_limit -= cpu->instructions_count_value;
-        cpu->instructions_count_value = 0;
+        cpu->instructions_count_limit -= cpu->instructions_count_value;  //  현재 블록에 수용할 수 있는 명령어 개수 업데이트
+        cpu->instructions_count_value = 0;                               //  동기화 후 0으로 다시 초기화
 
-        if(cpu->exit_request) {
+        if(cpu->exit_request) {  //  count 반영 도중 종료 요청 시 루프 탈출
             cpu->exit_request = 0;
             break;
         }
@@ -382,6 +385,8 @@ int32_t tlib_execute(uint32_t max_insns)
     //  we need to reset the instructions count value
     //  as this is might be accessed after calling `tlib_execute`
     //  to read the progress
+    //  C# 의 tlib_get_executed_instructions() 함수에서 다시 확인을 위해 참조함
+    //  그리고 나중에 거기서 다시 0으로 초기화해주기 떄문에 문제 안 생김
     cpu->instructions_count_value = local_counter;
 
     return result;

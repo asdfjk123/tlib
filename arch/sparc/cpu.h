@@ -334,7 +334,7 @@ typedef struct CPUState {
 
     /* ********************** */
 
-    CPU_COMMON
+    CPU_COMMON // 공통 객체 삽입 (cpu-defs.h 참조)
 
     /* MMU regs */
     /* temporary float registers */

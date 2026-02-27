@@ -655,6 +655,7 @@ void configure_read_address_caching(uint64_t address, uint64_t lower_address_cou
 
 static inline void cpu_sync_instructions_count(CPUState *cpu)
 {
+    //  instruction count 초기화
     cpu->instructions_count_value += cpu->instructions_count_declaration;
     cpu->instructions_count_total_value += cpu->instructions_count_declaration;
     cpu->instructions_count_declaration = 0;

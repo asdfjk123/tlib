@@ -1119,6 +1119,7 @@ static void tcg_prepare_st_ld_args(TCGContext *s, TCGType type, int rexw, int r0
 /* XXX: qemu_ld and qemu_st could be modified to clobber only EDX and
    EAX. It will be useful once fixed registers globals are less
    common. */
+// IR -> x86_64 어셈블리어 변환 함수
 static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, int opc)
 {
     int data_reg, data_reg2 = 0;
