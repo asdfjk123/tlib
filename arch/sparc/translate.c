@@ -2938,7 +2938,7 @@ void restore_state_to_opc(CPUState *env, TranslationBlock *tb, target_ulong *dat
         helper_compute_psr();
     }
 }
-
+// 인터럽트 판별
 int process_interrupt(int interrupt_request, CPUState *env)
 {
     if(tlib_is_in_debug_mode()) {
@@ -2954,7 +2954,7 @@ int process_interrupt(int interrupt_request, CPUState *env)
 
                 if(((type == TT_EXTINT) && cpu_pil_allowed(env, pil)) || type != TT_EXTINT) {
                     env->exception_index = env->interrupt_index;
-                    do_interrupt(env);
+                    do_interrupt(env); // 인터럽트 발생
                     return 1;
                 }
             }

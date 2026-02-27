@@ -334,11 +334,12 @@ typedef struct CPUState {
 
     /* ********************** */
 
-    CPU_COMMON // 공통 객체 삽입 (cpu-defs.h 참조)
+    CPU_COMMON  //  공통 객체 삽입 (cpu-defs.h 참조)
 
-    /* MMU regs */
-    /* temporary float registers */
-    float64 dt0, dt1;
+        /* MMU regs */
+        /* temporary float registers */
+        float64 dt0,
+        dt1;
     float128 qt0, qt1;
     float_status fp_status;
     sparc_def_t *def;
@@ -415,6 +416,8 @@ static inline bool tb_am_enabled(int tb_flags)
 static inline bool cpu_has_work(CPUState *env)
 {
     //  clear WFI if waking up condition is met
+    //  WFI (Wait For Interrupt): 처리할 작업이 없을 때 대기 모드로 진입 후 인터럽트 대기
+    //  interrupt 대기 중이고 interrupt 수용 활성화 상태라면 WFI 비활성화 후 작업 모드 진입
     env->wfi &= !(is_interrupt_pending(env, CPU_INTERRUPT_HARD) && cpu_interrupts_enabled(env));
     return !env->wfi;
 }

@@ -21,6 +21,8 @@
 #define __builtin_expect(x, n) (x)
 #endif
 
+//  함수가 거의 항상 참 또는 거짓이 될 거라고 가정하고, 기계어로 변환 시 자주 일어나는 명령어를 가까이 배치하는 등의 최적화를
+//  거친다.
 #define likely(x)   __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #endif

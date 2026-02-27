@@ -356,7 +356,7 @@ void tlib_on_leaving_reset_state()
 
 EXC_VOID_0(tlib_on_leaving_reset_state)
 
-//  번역의 진짜 시작점 함수
+//  가상 CPU의 최상위 시작점
 int32_t tlib_execute(uint32_t max_insns)
 {
     if(cpu->instructions_count_value != 0) {  //  0 으로 초기화가 안 되어 있는 경우 = instruction count 를 파악하지 못한 경우
@@ -369,14 +369,14 @@ int32_t tlib_execute(uint32_t max_insns)
     int32_t result = EXCP_INTERRUPT;
     while((result == EXCP_INTERRUPT) &&
           (cpu->instructions_count_limit > 0)) {  //  명령어 블록 최대 개수 넘지 않는 동안 또는 무시해도 되는 인터럽트인 경우
-        result = cpu_exec(cpu);                   //  번역 실행
+        result = cpu_exec(cpu);                   //  번역 실행 (에뮬레이션)
 
         cpu_sync_instructions_count(cpu);  //  instruction count 동기화
         local_counter += cpu->instructions_count_value;
         cpu->instructions_count_limit -= cpu->instructions_count_value;  //  현재 블록에 수용할 수 있는 명령어 개수 업데이트
         cpu->instructions_count_value = 0;                               //  동기화 후 0으로 다시 초기화
 
-        if(cpu->exit_request) {  //  count 반영 도중 종료 요청 시 루프 탈출
+        if(cpu->exit_request) {  //  count 반영 도중 cpu 에서 종료 요청 시 루프 탈출
             cpu->exit_request = 0;
             break;
         }

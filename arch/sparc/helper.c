@@ -314,6 +314,7 @@ uint64_t cpu_get_state_for_memory_transaction(CPUState *env, target_ulong addr, 
     return 0;
 }
 
+// 실제 인터럽트 발생 
 void do_interrupt(CPUState *env)
 {
     target_ulong tbr_base;

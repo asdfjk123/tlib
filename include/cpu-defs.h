@@ -238,7 +238,7 @@ enum block_interrupt_cause {
     int exception_index;                                                      \
     int nr_cores;   /* number of cores within this CPU package */             \
     int nr_threads; /* number of threads within this CPU */                   \
-    bool mmu_fault;                                                           \
+    bool mmu_fault; /* 메모리에 데이터가 없어 저장장치를 들러야 하는 경우 등 */                                                          \
                                                                               \
     /* External mmu settings */                                               \
     ExtMmuPosition external_mmu_position;                                     \

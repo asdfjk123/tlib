@@ -283,22 +283,31 @@ CPUDebugExcpHandler *cpu_set_debug_excp_handler(CPUDebugExcpHandler *handler)
  * I.e., the lock is never released when this happens. Therefore, this function checks
  * for any dangling locks that should've been unlocked, and does so.
  */
+//  프로그램은 보통 특정 메모리 공간에 접근하려고 할 때, 그 주소에 다른 코드가 접근하지 못하도록 lock 을 건다.
+//  하지만 도중에 메모리 결함이 일어나면, 이 lock 은 해제되지 않은 채로 남을 수 있다.
+//  따라서 cpu execute 를 본격적으로 시작하기 전에, 쓸데없이 남아있는 (dangling) lock 을 해제하는 과정을 진행한다.
 static void unlock_dangling_locks(CPUState *env)
 {
     //  For the "old" atomics.
+    //  전체 메모리 공간을 모두 잠궜을 때
     if(env->atomic_memory_state != NULL && env->atomic_memory_state->locking_cpu_id == env->atomic_id) {
-        clear_global_memory_lock(env);
+        clear_global_memory_lock(env);  //  전체 락 해제
     }
 
     //  For the "new" atomics.
+    //  특정 메모리 공간만 잠궜을 때
     if(unlikely(env->locked_address != 0)) {
         store_table_entry_t *entry = (store_table_entry_t *)address_hash(env, env->locked_address);
         uint32_t coreId = get_core_id(env);
         env->locked_address = 0;
         //  Unlock, _if it was locked by this core_, otherwise leave untouched.
         //  No point in retrying this, so just do it as a one-off.
-        atomic_compare_exchange_strong((_Atomic uint32_t *)&entry->lock, &coreId, HST_UNLOCKED);
+        atomic_compare_exchange_strong((_Atomic uint32_t *)&entry->lock, &coreId,
+                                       HST_UNLOCKED);  //  특정 코어 때문에 잠겼던 메모리 공간 해제
     }
+    //  128비트 단위의 거대한 atomic 연산에 사용되는 추가적인 메모리 공간에 대한 락을 해제
+    //  다만 SPARC 기준 쓸 일 없음
+    //  ARM64 의 LDXP / STXP 참조
     if(unlikely(env->locked_address_high != 0)) {
         store_table_entry_t *entry_high = (store_table_entry_t *)address_hash(env, env->locked_address_high);
         uint32_t coreId = get_core_id(env);
@@ -345,49 +354,56 @@ int cpu_exec(CPUState *env)
     uint8_t *tc_ptr;
     uintptr_t next_tb;
 
-    if(!cpu_has_work(env)) {
-        if(unlikely(env->cpu_wfi_state_change_hook_present)) {
+    //  대기 모드 진입 여부
+    if(!cpu_has_work(env)) {                                    //  수행할 작업 없다면 대기 모드로 진입
+        if(unlikely(env->cpu_wfi_state_change_hook_present)) {  //  실행될 확률이 극히 낮은 함수를 unlikely 라고 함
             on_cpu_no_work(env);
         }
-        return EXCP_WFI;
+        return EXCP_WFI;  //  대기 모드 진입을 위해 번역 종료
     }
     if(unlikely(env->cpu_wfi_state_change_hook_present)) {
         on_cpu_has_work(env);
     }
 
-    cpu_exec_prologue(env);
+    cpu_exec_prologue(env);  //  프롤로그 함수 (비어 있음)
     env->exception_index = -1;
 
     /* prepare setjmp context for exception handling */
-    for(;;) {
-        unlock_dangling_locks(env);
+    for(;;) {                        //  무한 루프 (Exception이 발생해 longjmp로 돌아오면 다시 여기서부터 재시작)
+        unlock_dangling_locks(env);  //  메모리 공간에 대해, 필요없는 락이 걸려있는지 확인 후 해제시킨다.
+        //  setjmp는 처음 호출될 때 0을 반환하여 정상적인 실행 흐름을 타고,
+        //  이후 실행 도중 결함(fault)이나 강제 종료(cpu_loop_exit 등)가 발생해 longjmp를 호출하면
+        //  여기로 되돌아오며 0이 아닌 값을 반환하여 else 문파트로 빠져 env를 복구한 후 다음 번 루프를 돕니다.
         if(setjmp(env->jmp_env) == 0) {
             /* if an exception is pending, we execute it here */
+            //  [ 1. 루프 시작: 이전에 대기 상태였거나 금방 발생한(pending) 인터럽트/예외를 먼저 처리 ]
             if(env->exception_index >= 0) {
-                if(env->return_on_exception || env->exception_index >= EXCP_INTERRUPT) {
+                if(env->return_on_exception || env->exception_index >= EXCP_INTERRUPT) {  //  무시하면 안 될 인터럽트라면
                     /* exit request from the cpu execution loop */
                     ret = env->exception_index;
-                    if((ret == EXCP_DEBUG) && debug_excp_handler) {
+                    if((ret == EXCP_DEBUG) && debug_excp_handler) {  //  필요하다면 디버깅
                         debug_excp_handler(env);
                     }
                     break;
                 } else {
-                    do_interrupt(env);
+                    do_interrupt(env);  //  인터럽트 수행
                     if(env->exception_index != -1) {
-                        if(env->exception_index == EXCP_WFI) {
+                        if(env->exception_index == EXCP_WFI) {  //  인터럽트 처리 후 수행할 게 없으면
                             env->exception_index = -1;
                             ret = 0;
-                            break;
+                            break;  //  대기 모드로 진입
                         }
                         env->exception_index = -1;
                     }
                 }
             }
 
+            //  번역 수행
             next_tb = 0; /* force lookup of first TB */
             for(;;) {
                 cpu_sync_instructions_count(env);
 
+                //  번역 수행 직전 다시 한 번 인터럽트 확인
                 interrupt_request = env->interrupt_request;
                 if(unlikely(interrupt_request)) {
                     if(is_interrupt_pending(env, CPU_INTERRUPT_DEBUG)) {
@@ -395,6 +411,7 @@ int cpu_exec(CPUState *env)
                         env->exception_index = EXCP_DEBUG;
                         cpu_loop_exit_without_hook(env);
                     }
+                    //  인터럽트 처리 후 다시 TB 0 으로 초기화
                     if(process_interrupt(interrupt_request, env)) {
                         next_tb = 0;
                     }
@@ -424,26 +441,33 @@ int cpu_exec(CPUState *env)
                     next_tb = 0;
                 }
 #endif
+                //  mmu fault 가 일어날 것이라는 가정
                 if(unlikely(env->mmu_fault)) {
                     env->exception_index = MMU_EXTERNAL_FAULT;
                     cpu_loop_exit_without_hook(env);
                 }
-
+                //  인터럽트/예외가 일어날 것이라는 가정
                 if(unlikely(env->exception_index != -1)) {
                     cpu_loop_exit_without_hook(env);
                 }
+                //  블록 최대 명령어 개수만큼 담았다면
                 if(cpu->instructions_count_value == cpu->instructions_count_limit) {
-                    env->exit_request = 1;
+                    env->exit_request = 1;  //  모든 과정 종료하게끔 플래그 세움
                 }
+                //  바로 다음에서 플래그 받아서 번역 전 과정 종료
                 if(unlikely(env->exit_request)) {
                     env->exception_index = EXCP_INTERRUPT;
                     cpu_loop_exit_without_hook(env);
                 }
+                //  재시작 희망 시
                 if(unlikely(env->tb_restart_request)) {
                     env->tb_restart_request = 0;
                     cpu_loop_exit_without_hook(env);
                 }
 
+                //  tb_find_fast 는 배열 변수 (힙 영역) 에 존재하는 캐시에서 찾는다.
+                //  tb_find_slow 는 메모리 공간 (데이터 영역) 에 존재하는 캐시에서 찾는다. 가상 주소를 물리 주소로 변환하는 과정이
+                //  추가적으로 있으므로, 더 느리다.
                 tb = tb_find_fast(env);
                 /* Note: we do it here to avoid a gcc bug on Mac OS X when
                    doing it in tb_find_slow */
@@ -473,6 +497,7 @@ int cpu_exec(CPUState *env)
                 if(likely(!env->exit_request)) {
                     tc_ptr = (uint8_t *)rw_ptr_to_rx(tb->tc_ptr);
                     /* execute the generated code */
+                    //  [ 2-3. 찾아낸(혹은 번역한) 코드 블록(TB)을 비로소 실행 ]
                     next_tb = tcg_tb_exec(env, tc_ptr);
                     /* Flush the list after every unchained block */
                     flush_dirty_addresses_list();
