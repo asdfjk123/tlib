@@ -392,6 +392,7 @@ static inline int cpu_pil_allowed(CPUState *env, int pil)
 #define TB_FLAG_FPU_ENABLED (1 << 4)
 #define TB_FLAG_AM_ENABLED  (1 << 5)
 
+//  cpu state 객체로부터 현재 pc 값과 fpu 활성화 여부 정보를 꺼낸다.
 static inline void cpu_get_tb_cpu_state(CPUState *env, target_ulong *pc, target_ulong *cs_base, int *flags)
 {
     *pc = env->pc;

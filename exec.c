@@ -1834,7 +1834,7 @@ void *get_ram_ptr(ram_addr_t addr)
 
 ram_addr_t ram_addr_from_host(void *ptr)
 {
-    return tlib_host_ptr_to_guest_offset(ptr);
+    return tlib_host_ptr_to_guest_offset(ptr); // 포인터를 통해 guest 메모리의 offset 값 반환
 }
 
 void notdirty_mem_writeb(void *opaque, target_phys_addr_t ram_addr, uint32_t val)

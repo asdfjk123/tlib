@@ -159,9 +159,11 @@ void TLIB_NORETURN cpu_loop_exit_restore(CPUState *cpu, uintptr_t pc, uint32_t c
     cpu_loop_exit_without_hook(cpu);
 }
 
+//  메모리 공간의 데이터/bss 영역 캐시에서 블록을 찾는다.
 static TranslationBlock *tb_find_slow(CPUState *env, target_ulong pc, target_ulong cs_base, uint64_t flags)
 {
-    tlib_on_translation_block_find_slow(pc);
+    tlib_on_translation_block_find_slow(
+        pc);  //  외부에 fast 캐시 미스가 발생했다고 알린다. renode 는 프로파일링 등에 사용할 것으로 예상된다.
     TranslationBlock *tb, **ptb1;
     TranslationBlock *prev_related_tb;
     unsigned int h;
@@ -174,13 +176,17 @@ static TranslationBlock *tb_find_slow(CPUState *env, target_ulong pc, target_ulo
     max_icount = env->instructions_count_limit - env->instructions_count_value;
 
     /* find translated block using physical mappings */
-    phys_page1 = get_page_addr_code(env, pc, true);
+    phys_page1 = get_page_addr_code(env, pc, true);  //  pc 값 (가상 머신의 가상 주소) 을 가상 머신의 물리 주소로 변환
     /* tb_phys_hash_func expects the physical PC to be passed.
      * `phys_page1` will not be the physical PC if it resides in an `ArrayMemory` peripheral
      * (see logic in `get_page_addr_code`) */
-    h = tb_phys_hash_func(phys_page1 | (pc & ~TARGET_PAGE_MASK));
+    /* ArrayMemory: 가상 아키텍처의 메모리 공간을 구현한 방식 */
+    h = tb_phys_hash_func(phys_page1 | (pc & ~TARGET_PAGE_MASK));  //  페이지 테이블을 통해 물리 주소로 변환
+    //  물리 주소의 공간에 있는 블록 불러오기
+    //  이 부분도 배열이지만, 물리 주소를 사용한다는 점에서 차이가 있다.
     ptb1 = &tb_phys_hash[h];
 
+    //  혹여라도 캐시 비활성화 되어 있다면
     if(unlikely(env->tb_cache_disabled)) {
         goto not_found;
     }
@@ -190,14 +196,16 @@ static TranslationBlock *tb_find_slow(CPUState *env, target_ulong pc, target_ulo
         if(!tb) {
             goto not_found;
         }
+        //  올바르게 가져왔다면 작업 수행
         if(tb->pc == pc && tb->page_addr[0] == phys_page1 && tb->cs_base == cs_base && tb->flags == flags) {
-            if(tb->icount <= max_icount) {
+            if(tb->icount <= max_icount) {  //  최대 개수 이하로 부합한다면
                 /* check next page if needed */
-                if(tb->page_addr[1] != -1) {
+                if(tb->page_addr[1] != -1) {  //  혹여나 추가적인 페이지 테이블이 있다면 그 부분도 검사
                     tb_page_addr_t phys_page2;
 
                     virt_page2 = (pc & TARGET_PAGE_MASK) + TARGET_PAGE_SIZE;
-                    phys_page2 = get_page_addr_code(env, virt_page2, true);
+                    phys_page2 =
+                        get_page_addr_code(env, virt_page2, true);  //  페이지의 논리 주소를 (가상 머신의) 물리 주소로 변환
                     if(tb->page_addr[1] == phys_page2) {
                         goto found;
                     }
@@ -210,29 +218,40 @@ static TranslationBlock *tb_find_slow(CPUState *env, target_ulong pc, target_ulo
         }
         ptb1 = &tb->phys_hash_next;
     }
-not_found:
+not_found:  //  블록이 캐시에 존재하지 않는 경우
     /* if no translated code available, then translate it now */
-    tb = tb_gen_code(env, pc, cs_base, flags, 0);
+    tb = tb_gen_code(env, pc, cs_base, flags, 0);  //  코드 생성
 
     /* if tb_gen_code flushed translation blocks, ptb1 and prev_related_tb can be invalid;
      * this is indicated by `tb_invalidated_flag` which is reset at the beginning of the current function
      * and set when we invalidate TB (e.g. as a result of the code buffer reallocation) */
+    //  tb_gen_code 가 블록을 모두 지웠을 수 있다.
+    //  이에 따라 이전 블록 또는 앞으로 번역할 블록 등이 무효화했는지를 플래그로 확인해야 한다.
     if(unlikely(tb_invalidated_flag)) {
         prev_related_tb = NULL;
         ptb1 = &tb_phys_hash[h];
     }
-found:
+found:  //  블록이 캐시에 존재하는 경우
     /* Move the last found TB closer to the beginning of the list,
      * but keeping related TBs sorted.
      * 'related' means TBs generated from the same code, but with
      * different icount */
+    //  was_cut -> 블록이 max size 보다 너무 커서 중간에 잘린건지
+    //  prev_related_tb -> 게스트 기준으로 한 주기 동안 실행하는 명령어가 여러 개의 블록과 연관된 경우, 연관된 블록이 들어있다.
+    //  중요) 분기문까지의 명령어 묶음에 대한 번역 블록이 여러 개가 존재할 수 있다. 그 중에 가장 길거나, 온전히 명령어 묶음을 모두
+    //  담아낸 블록이 가장 실행하기 수월한 블록이므로, 그걸 찾는 과정인 것이다.
+    //  tb_phys_hash[h] 에서 h 는 해시값이다. 즉, 같은 PC 값의 블록들이 연결 리스트로 묶여 있는 구조이다. 그 중에서 가장 큰 블록을
+    //  가져오는 것이다.
+    //  블록 크기가 다르므로, 다른 인덱스의 블록끼리 겹치는 명령어가 있을 수 있으나, 어차피 실행 후 다음 PC 값 기준으로 검색하기
+    //  때문에 실행에 문제는 되지 않는다.
     if(!tb->was_cut || !prev_related_tb) {
         /* TB wasn't cut or is the first in the list among related to it.
          * It means it is the largest TB and can be
          * inserted at the beginning of the list */
-        *ptb1 = tb->phys_hash_next;
-        tb->phys_hash_next = tb_phys_hash[h];
-        tb_phys_hash[h] = tb;
+        //  tb 를 해당 해시 인덱스의 맨 앞에 배치하는 작업
+        *ptb1 = tb->phys_hash_next;            //  다음 블록을 가리키게 한다.
+        tb->phys_hash_next = tb_phys_hash[h];  //  해시 인덱스 맨 앞을 tb 의 다음 연결 리스트에 배치
+        tb_phys_hash[h] = tb;                  //  tb 를 해시 맨 앞에 배치
     } else {
         /* Move the TB just after previous related TB */
         *ptb1 = tb->phys_hash_next;
@@ -240,11 +259,13 @@ found:
         prev_related_tb->phys_hash_next = tb;
     }
     /* we add the TB in the virtual pc hash table */
+    //  tb_find_fast 와 연관된 fast cache 에 저장 (fast cache 는 실제 주소를 인덱스로 사용하므로)
     env->tb_jmp_cache[tb_jmp_cache_hash_func(pc)] = tb;
 
     return tb;
 }
 
+//  배열 공간에서 블록을 찾는다.
 static inline TranslationBlock *tb_find_fast(CPUState *env)
 {
     TranslationBlock *tb;
@@ -257,9 +278,12 @@ static inline TranslationBlock *tb_find_fast(CPUState *env)
        always be the same before a given translated block
        is executed. */
     cpu_get_tb_cpu_state(env, &pc, &cs_base, &flags);
-    tb = env->tb_jmp_cache[tb_jmp_cache_hash_func(pc)];
+    tb = env->tb_jmp_cache[tb_jmp_cache_hash_func(
+        pc)];  //  캐시에서 pc 값을 통해 해시 계산해서 블록 찾기 (tb_jmp_cache 라는 배열에서 가져온다.)
     if(unlikely(!tb || tb->pc != pc || tb->cs_base != cs_base || tb->flags != flags || env->tb_cache_disabled) ||
-       (tb->was_cut && tb->icount < max_icount) || (tb->icount > max_icount)) {
+       (tb->was_cut && tb->icount < max_icount) ||
+       (tb->icount > max_icount)) {  //  현재 남은 '실행 허용된' 명령어 개수보다 블록 크기가 크거나 작다면, slow cache 에서 맞는
+                                     //  사이즈의 블록을 실행하도록 가져온다.
         tb = tb_find_slow(env, pc, cs_base, flags);
     }
     return tb;
@@ -471,7 +495,8 @@ int cpu_exec(CPUState *env)
                 tb = tb_find_fast(env);
                 /* Note: we do it here to avoid a gcc bug on Mac OS X when
                    doing it in tb_find_slow */
-                if(tb_invalidated_flag) {
+                if(tb_invalidated_flag) {  //  translation block 자체가 유효하지 않은 상태라면 (e.g. 코드 생성 중 에러로 인해
+                                           //  제대로 안 만들어졌다던지)
                     /* as some TB could have been invalidated because
                        of memory exceptions while generating the code, we
                        must recompute the hash index here */
@@ -495,13 +520,14 @@ int cpu_exec(CPUState *env)
                 env->current_tb = tb;
                 asm volatile("" ::: "memory");
                 if(likely(!env->exit_request)) {
-                    tc_ptr = (uint8_t *)rw_ptr_to_rx(tb->tc_ptr);
+                    tc_ptr = (uint8_t *)rw_ptr_to_rx(
+                        tb->tc_ptr);  //  번역 블록 안의 코드의 주소를 쓰기 가능에서 실행 가능으로 바꾼다. -> 메모리 보호 정책
                     /* execute the generated code */
-                    //  [ 2-3. 찾아낸(혹은 번역한) 코드 블록(TB)을 비로소 실행 ]
+                    //  tb 실행
                     next_tb = tcg_tb_exec(env, tc_ptr);
                     /* Flush the list after every unchained block */
                     flush_dirty_addresses_list();
-                    if((next_tb & 3) == EXIT_TB_FORCE) {
+                    if((next_tb & 3) == EXIT_TB_FORCE) { // 블록을 벗어나야 하는 상태라면 루프에서 탈출
                         tb = (TranslationBlock *)(uintptr_t)(next_tb & ~3);
                         /* Restore PC.  */
                         cpu_pc_from_tb(env, tb);
@@ -521,7 +547,7 @@ int cpu_exec(CPUState *env)
         }
     } /* for(;;) */
 
-    cpu_exec_epilogue(env);
+    cpu_exec_epilogue(env);  //  에필로그 (빈 껍데기 함수로, 필요한 작업 추가 가능)
 
     return ret;
 }

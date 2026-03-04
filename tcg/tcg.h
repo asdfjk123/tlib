@@ -813,6 +813,7 @@ static inline void tcg_set_insn_start_param(TCGArg *params, int i, TCGArg value)
     params[i] = value;
 }
 
+//  tb 실행
 /* TCG targets may use a different definition of tcg_tb_exec. */
 #if !defined(tcg_tb_exec)
 #define tcg_tb_exec(env, tb_ptr) ((uintptr_t REGPARM (*)(void *, void *))tcg->code_gen_prologue)(env, tb_ptr)

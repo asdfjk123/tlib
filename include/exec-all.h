@@ -174,10 +174,14 @@ static inline unsigned int tb_jmp_cache_hash_page(target_ulong pc)
     return (tmp >> (TARGET_PAGE_BITS - TB_JMP_PAGE_BITS)) & TB_JMP_PAGE_MASK;
 }
 
+//  pc 값을 캐시 인덱스로 변환
 static inline unsigned int tb_jmp_cache_hash_func(target_ulong pc)
 {
     target_ulong tmp;
-    tmp = pc ^ (pc >> (TARGET_PAGE_BITS - TB_JMP_PAGE_BITS));
+    tmp = pc ^
+          (pc >>
+           (TARGET_PAGE_BITS -
+            TB_JMP_PAGE_BITS));  //  jmp page bit 자리로 끌어내기 위해 pc 값을 right shift & 중간 정보를 유지하기 위한 xor 연산
     return (((tmp >> (TARGET_PAGE_BITS - TB_JMP_PAGE_BITS)) & TB_JMP_PAGE_MASK) | (tmp & TB_JMP_ADDR_MASK));
 }
 
@@ -312,6 +316,9 @@ void append_dirty_address(uint64_t address);
 /* NOTE: this function can trigger an exception when used with `map_when_needed == true` */
 /* NOTE2: the returned address is not exactly the physical address: it
    is the offset relative to phys_ram_base */
+//  pc 값 (= 가상 머신의 가상 주소) 을 1) I/O 메모리인 경우 가상 머신의 물리 주소 2) 일반 메모리인 경우 가상 머신의 offset 으로
+//  반환한다.
+
 static inline tb_page_addr_t get_page_addr_code(CPUState *env1, target_ulong addr, bool map_when_needed)
 {
     int mmu_idx, page_index;
@@ -328,16 +335,18 @@ static inline tb_page_addr_t get_page_addr_code(CPUState *env1, target_ulong add
     }
 
     if(unlikely(addr_code != page_addr)) {
-        if(map_when_needed) {
-            ldub_code(addr);
+        if(map_when_needed) {  //  TLB miss 발생 시 처리 방식 (매핑) 이 활성화된 경우
+            ldub_code(addr);   //  MMU 가 매핑 정보를 추가하도록 유도하는 exception
         } else {
-            return -1;
+            return -1;  //  그냥 -1 만 반환
         }
     }
 
     pd = env1->tlb_table[mmu_idx][page_index].addr_code & ~TARGET_PAGE_MASK;
+    //  접근하면 안되는 메모리 영역에서 코드를 읽어오는건지 확인
+    //  e.g. 일반적인 RAM 또는 ROM 이 아니거나 실행할 수 없는 I/O 장치의 영역이 아닌 경우
     if(unlikely(pd > IO_MEM_ROM && !(pd & IO_MEM_ROMD) && !(pd & IO_MEM_EXECUTABLE_IO))) {
-        const char *reason = "outside RAM or ROM";
+        const char *reason = "outside RAM or ROM";  //  일반적인 메모리 영역을 벗어났다고 로깅
 
         if(tlib_is_memory_disabled(page_addr, TARGET_PAGE_SIZE)) {
             reason = "from disabled or locked memory";
@@ -345,6 +354,8 @@ static inline tb_page_addr_t get_page_addr_code(CPUState *env1, target_ulong add
         cpu_abort(env1, "Trying to execute code %s at 0x" TARGET_FMT_lx "\n", reason, addr);
     }
 
+    //  일반적인 메모리 영역이 아닌 I/O 메모리인 경우는 가상 머신의 물리 주소를 반환
+    //  I/O 메모리의 경우 offset 으로 접근하는 게 불가능하다고 함 -> 주소가 I/O 장치의 ID 로써 사용되기 때문에 실제 주소를 줘야 함
     if(unlikely(pd & IO_MEM_EXECUTABLE_IO)) {
         /* In this case we don't return page address nor a ram pointer, for MMIO we return only
          * address aligned to page size.
@@ -352,8 +363,10 @@ static inline tb_page_addr_t get_page_addr_code(CPUState *env1, target_ulong add
         return page_addr + (env1->iotlb[mmu_idx][page_index] & ~IO_MEM_EXECUTABLE_IO);
     }
 
+    //  addend 보정값 더해서 실제 메모리 주소를 가리키는 "포인터" 를 가져온다.
+    //  여기서 갑자기 호스트 컴퓨터의 실제 메모리 주소를 저장하는 이유는, 그게 가장 빠르기 때문이다.
     p = (void *)((uintptr_t)page_addr + env1->tlb_table[mmu_idx][page_index].addend);
-    return ram_addr_from_host(p);
+    return ram_addr_from_host(p);  //  포인터를 통해 가상 메모리 상의 offset 반환 -> 배열 형태로 되어 있으므로 더 빠르게 접근 가능
 }
 
 static inline int find_last_mmu_window_possibly_covering(uint64_t address)
