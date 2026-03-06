@@ -220,7 +220,9 @@ static TranslationBlock *tb_find_slow(CPUState *env, target_ulong pc, target_ulo
     }
 not_found:  //  블록이 캐시에 존재하지 않는 경우
     /* if no translated code available, then translate it now */
-    tb = tb_gen_code(env, pc, cs_base, flags, 0);  //  코드 생성
+    //  코드 생성
+    //  이 곳 내부에 disas_insn 함수가 존재함
+    tb = tb_gen_code(env, pc, cs_base, flags, 0);
 
     /* if tb_gen_code flushed translation blocks, ptb1 and prev_related_tb can be invalid;
      * this is indicated by `tb_invalidated_flag` which is reset at the beginning of the current function
@@ -524,10 +526,10 @@ int cpu_exec(CPUState *env)
                         tb->tc_ptr);  //  번역 블록 안의 코드의 주소를 쓰기 가능에서 실행 가능으로 바꾼다. -> 메모리 보호 정책
                     /* execute the generated code */
                     //  tb 실행
-                    next_tb = tcg_tb_exec(env, tc_ptr);
+                    next_tb = tcg_tb_exec(env, tc_ptr);  //  tcg.h 참조
                     /* Flush the list after every unchained block */
                     flush_dirty_addresses_list();
-                    if((next_tb & 3) == EXIT_TB_FORCE) { // 블록을 벗어나야 하는 상태라면 루프에서 탈출
+                    if((next_tb & 3) == EXIT_TB_FORCE) {  //  블록을 벗어나야 하는 상태라면 루프에서 탈출
                         tb = (TranslationBlock *)(uintptr_t)(next_tb & ~3);
                         /* Restore PC.  */
                         cpu_pc_from_tb(env, tb);

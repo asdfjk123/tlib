@@ -408,6 +408,7 @@ void cpu_exec_init(CPUState *env)
 
 /* Allocate a new translation block. Flush the translation buffer if
    too many translation blocks or too much generated code. */
+//  새로운 tb 생성
 static TranslationBlock *tb_alloc(target_ulong pc)
 {
     TranslationBlock *tb;
@@ -677,6 +678,7 @@ static void build_page_bitmap(PageDesc *p)
     }
 }
 
+//  중요: 캐시 (번역본) 이 없을 경우, 코드를 직접 생성하는 구현부
 TranslationBlock *tb_gen_code(CPUState *env, target_ulong pc, target_ulong cs_base, int flags, uint16_t cflags)
 {
     TranslationBlock *tb;
@@ -685,9 +687,9 @@ TranslationBlock *tb_gen_code(CPUState *env, target_ulong pc, target_ulong cs_ba
     target_ulong virt_page2;
     int code_gen_size, search_size;
 
-    phys_page1 = get_page_addr_code(env, pc, true);
-    tb = tb_alloc(pc);
-    if(!tb) {
+    phys_page1 = get_page_addr_code(env, pc, true);  //  pc 값의 물리 주소 (가상 머신 상에서의 물리 주소) 반환
+    tb = tb_alloc(pc);                               //  새로운 tb 생성
+    if(!tb) {                                        //  생성 실패하면 다시 시도
         /* flush must be done */
         tb_flush(env);
         /* try to expand code gen buffer */
@@ -716,7 +718,7 @@ TranslationBlock *tb_gen_code(CPUState *env, target_ulong pc, target_ulong cs_ba
             phys_page2 = get_page_addr_code(env, virt_page2, true);
         }
     }
-    tb_link_page(tb, phys_page1, phys_page2);
+    tb_link_page(tb, phys_page1, phys_page2);  //  메모리 공간(페이지 형태이므로 page 라고도 함)에 저장
     return tb;
 }
 
@@ -988,14 +990,20 @@ static inline void tb_alloc_page(TranslationBlock *tb, unsigned int n, tb_page_a
     }
 }
 
+//  블록을 메모리 공간 (페이지 단위이기 때문에 page 라고도 하는 것이다.) 에 저장한다.
+//  블록이 2개의 페이지를 차지하는 경우는 극히 드문 경우로, 마지막 명령어가 페이지 경계에 걸쳐 있는 특수한 경우를 대비하기
+//  위해서이다. 기본적으로 1개의 페이지에만 저장되도록 앞에서 조치를 취한다.
 /* add a new TB. phys_page2 is (-1) to indicate that only one page contains the TB. */
 void tb_link_page(TranslationBlock *tb, tb_page_addr_t phys_page1, tb_page_addr_t phys_page2)
 {
     /* Grab the mmap lock to stop another thread invalidating this TB
        before we are done.  */
+    //  해당 페이지에 대한 접근을 막는다.
+    //  다른 스레드에서 이 공간을 invalidate 로 판단하지 않도록 하기 위해서
     mmap_lock();
 
     /* add in the page list */
+    //  메모리 공간에 tb 할당
     tb_alloc_page(tb, 0, phys_page1);
     if(phys_page2 != -1) {
         tb_alloc_page(tb, 1, phys_page2);
@@ -1003,11 +1011,14 @@ void tb_link_page(TranslationBlock *tb, tb_page_addr_t phys_page1, tb_page_addr_
         tb->page_addr[1] = -1;
     }
 
+    //  해당 블록의 이전 블록 포인터에 대한 초기화
     tb->jmp_first = (TranslationBlock *)((uintptr_t)tb | EXIT_TB_FORCE);
     tb->jmp_next[0] = NULL;
     tb->jmp_next[1] = NULL;
 
     /* init original jump addresses */
+    //  분기문인 경우 점프할 곳이 2개이기 때문에 2개 마련
+    //  만들어질 떄는 점프할 곳이 없기 떄문에 초기화
     if(tb->tb_next_offset[0] != 0xffff) {
         tb_reset_jump(tb, 0);
     }
@@ -1015,7 +1026,7 @@ void tb_link_page(TranslationBlock *tb, tb_page_addr_t phys_page1, tb_page_addr_
         tb_reset_jump(tb, 1);
     }
 
-    mmap_unlock();
+    mmap_unlock();  //  lock 해제
 }
 
 /* find the TB 'tb' such that tb[0].tc_ptr <= tc_ptr <
@@ -1834,7 +1845,7 @@ void *get_ram_ptr(ram_addr_t addr)
 
 ram_addr_t ram_addr_from_host(void *ptr)
 {
-    return tlib_host_ptr_to_guest_offset(ptr); // 포인터를 통해 guest 메모리의 offset 값 반환
+    return tlib_host_ptr_to_guest_offset(ptr);  //  포인터를 통해 guest 메모리의 offset 값 반환
 }
 
 void notdirty_mem_writeb(void *opaque, target_phys_addr_t ram_addr, uint32_t val)

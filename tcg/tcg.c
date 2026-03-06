@@ -343,8 +343,15 @@ void tcg_set_frame(TCGContext *s, int reg, tcg_target_long start, tcg_target_lon
     s->frame_reg = reg;
 }
 
+//  tcg 엔진이 사용할 메모리 공간을 풀 형태로 관리
+//  풀을 리셋하는 과정
 void tcg_func_start(TCGContext *s)
 {
+    //  tcg 는 번역 도중에 수많은 임시 객체를 메모리에 만들어놓고 사용한다.
+    //  nb_temps: tb 에서 사용 중인 임시 변수의 개수
+    //  nb_globals: 전역 변수 개수
+    //  nb_ops: 생성된 중간 명령어 개수
+    //  label: 어셈블리어의 라벨. 즉, 점프할 부분
     int i;
     tcg_pool_reset(s);
     s->nb_temps = s->nb_globals;

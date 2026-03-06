@@ -13329,7 +13329,7 @@ int gen_breakpoint(DisasContextBase *base, CPUBreakpoint *bp)
 /* generate intermediate code in gen_opc_buf and gen_opparam_buf for
    basic block 'tb'. Also generate PC information for each
    intermediate instruction. */
-
+//  TCG Ops 생성
 int gen_intermediate_code(CPUState *env, DisasContextBase *base)
 {
     DisasContext *dc = (DisasContext *)base;

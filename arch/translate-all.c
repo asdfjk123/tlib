@@ -67,29 +67,34 @@ __attribute__((weak)) void gen_block_header_arch_action(TranslationBlock *tb)
     //  It will be overriden by arch-specific actions
 }
 
+//  블록이 실행될 때 가장 먼저 실행되는 도입부 코드 생성 함수
 static inline void gen_block_header(TranslationBlock *tb)
 {
     TCGv_i32 flag;
     exit_no_hook_label = gen_new_label();
     TCGv_ptr tb_pointer = tcg_const_ptr((tcg_target_long)tb);
     flag = tcg_temp_local_new_i32();
-    gen_helper_prepare_block_for_execution(flag, tb_pointer);
+    gen_helper_prepare_block_for_execution(flag, tb_pointer);  //  해당 블록이 실행해도 되는 상태인지에 대한 어셈블리어 삽입
     tcg_temp_free_ptr(tb_pointer);
+
+    //  tb 가 종료되어야 하는 상황에 대한 동작 삽입 (gen_helper_prepare_block_for_execution 에서 0이 아닌 값을 반환하면)
     tcg_gen_brcondi_i32(TCG_COND_NE, flag, 0, exit_no_hook_label);
     tcg_temp_free_i32(flag);
 
+    //  코드가 시작될 떄 발생하는 이벤트 처리
     if(cpu->block_begin_hook_present) {
         TCGv_i32 result = tcg_temp_new_i32();
-        gen_helper_block_begin_event(result);
+        gen_helper_block_begin_event(result);  //  블록 시작 함수 제작
         block_header_interrupted_label = gen_new_label();
         tcg_gen_brcondi_i32(TCG_COND_EQ, result, 0, block_header_interrupted_label);
         tcg_temp_free_i32(result);
     }
 
-    gen_declare_instructions_count(tb);
+    gen_declare_instructions_count(tb);  //  블록 안의 guest 명령어 개수 계산
 
     //  It's important that the arch_action occurs after all other actions in the header are generated
     //  PMU counters in Arm depend on it
+    //  특정 아키텍처를 위한 추가 함수
     gen_block_header_arch_action(tb);
 }
 
@@ -156,15 +161,17 @@ static inline uint32_t get_max_tb_instruction_count(CPUState *env)
     return maximum_block_size > current_instructions_count_limit ? current_instructions_count_limit : maximum_block_size;
 }
 
+//  guest 명령어 -> TCG Ops 변환
 static void cpu_gen_code_inner(CPUState *env, TranslationBlock *tb)
 {
     DisasContext dcc = {};
     CPUBreakpoint *bp;
-    DisasContextBase *dc = (DisasContextBase *)&dcc;
+    DisasContextBase *dc = (DisasContextBase *)&dcc;  //  참고) dcc 객체의 일부분만 수정하기 위해 형변환 후 참조자로 할당함
 
-    uint32_t max_tb_icount = get_max_tb_instruction_count(env);
+    uint32_t max_tb_icount = get_max_tb_instruction_count(env);  //  블록 안에 들어갈 수 있는 최대 guest 명령어 개수 파악
     TCGOpcodeEntry *opc_start_ptr = gen_opc_ptr;
 
+    //  현재 번역 중인 블록에 대한 정보(컨텍스트) 초기화
     tb->icount = 0;
     tb->was_cut = false;
     tb->size = 0;
@@ -326,6 +333,7 @@ static int encode_search(TranslationBlock *tb, uint8_t *block)
 /* '*gen_code_size_ptr' contains the size of the generated code (host
    code), '*search_size_ptr' contains the size of the search data.
  */
+//  코드 생성
 void cpu_gen_code(CPUState *env, TranslationBlock *tb, int *gen_code_size_ptr, int *search_size_ptr)
 {
     TCGContext *s = tcg->ctx;
@@ -333,10 +341,10 @@ void cpu_gen_code(CPUState *env, TranslationBlock *tb, int *gen_code_size_ptr, i
     int gen_code_size, search_size;
 
     tcg_func_start(s);
-    cpu_gen_code_inner(env, tb);
+    cpu_gen_code_inner(env, tb);  //  guest 명령어 -> TCG Ops 변환
 
     /* generate machine code */
-    gen_code_buf = tb->tc_ptr;
+    gen_code_buf = tb->tc_ptr;  //  tc_ptr: tb 를 저장할 공간에 대한 포인터
     tb->tb_next_offset[0] = 0xffff;
     tb->tb_next_offset[1] = 0xffff;
 
@@ -344,9 +352,10 @@ void cpu_gen_code(CPUState *env, TranslationBlock *tb, int *gen_code_size_ptr, i
     s->tb_jmp_offset = tb->tb_jmp_offset;
     s->tb_next = NULL;
 
-    gen_code_size = tcg_gen_code(s, gen_code_buf);
+    gen_code_size = tcg_gen_code(s, gen_code_buf);  //  TCG Ops -> host 명령어 변환
     *gen_code_size_ptr = gen_code_size;
-    tcg_perf_out_symbol_from_tb(tb, gen_code_size, "cpu_gen_code");
+    tcg_perf_out_symbol_from_tb(tb, gen_code_size, "cpu_gen_code");  //  디버깅 및 프로파일링을 위한 심볼 정보 출력
+    //  심볼: 주소를 사람이 읽을 수 있도록 만든 텍스트
 
     search_size = encode_search(tb, gen_code_buf + gen_code_size);
     *search_size_ptr = search_size;

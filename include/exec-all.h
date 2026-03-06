@@ -116,6 +116,7 @@ void TLIB_NORETURN arch_raise_external_abort(CPUState *env, target_ulong address
 
 extern uint32_t maximum_block_size;
 
+//  translation block 정의
 struct TranslationBlock {
     target_ulong pc;      /* simulated PC corresponding to this block (EIP + CS base) */
     target_ulong cs_base; /* CS base for this block */
