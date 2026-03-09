@@ -159,6 +159,7 @@ typedef struct TCGReg128 {
 #define TCG_TARGET_HAS_GUEST_BASE
 
 /* Note: must be synced with cpu-defs.h */
+//  x86_64 의 경우 r14 레지스터가 TCG_AREG0 을 가리키고,
 #if TCG_TARGET_REG_BITS == 64
 #define TCG_AREG0 TCG_REG_R14
 #else

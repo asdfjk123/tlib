@@ -54,10 +54,14 @@ void HELPER(invalidate_dirty_addresses_shared)(CPUState *env)
 
 //  verify if there are instructions left to execute, update instructions count
 //  and trim the block and exit to the main loop if necessary
+//  tb 실행 시, 항상 시작 전에 돌아가는 함수 (tb 의 어셈블리어의 시작 부분에 항상 포함되어 있음)
+//  laysin DBT 와 다르게 모든 블록에 대해 실행되므로, 사이클 동기화도 모두 수행
 uint32_t HELPER(prepare_block_for_execution)(void *tb)
 {
     cpu->current_tb = (TranslationBlock *)tb;
 
+    //  대기 중인 exception 이 있는지 확인
+    //  있으면 블록 실행하지 않고 종료
     if(unlikely(cpu->exception_index >= 0)) {
         //  Exit the current block if a exception is pending. This will be true if a block interrupt was requested
         //  at the end of the previous block, but couldn't be handled there. See `interrupt_current_translation_block`
@@ -65,13 +69,16 @@ uint32_t HELPER(prepare_block_for_execution)(void *tb)
         return 1;
     }
 
+    //  cpu 의 종료 요청이 있는지 확인
     if(cpu->exit_request != 0) {
         return cpu->exit_request;
     }
 
+    //  cycle count 동기화
     cpu_sync_instructions_count(cpu);
     uint32_t instructions_left = cpu->instructions_count_limit - cpu->instructions_count_value;
 
+    //  tb 의 길이 및 유효성 검사
     if(instructions_left == 0) {
         //  setting `tb_restart_request` to 1 will stop executing this block at the end of the header
         cpu->tb_restart_request = 1;
@@ -85,7 +92,7 @@ uint32_t HELPER(prepare_block_for_execution)(void *tb)
         tb_phys_invalidate(cpu->current_tb, -1);
         cpu->tb_restart_request = 1;
     }
-    return cpu->tb_restart_request;
+    return cpu->tb_restart_request;  //  문제 없으면 0, 아니면 1
 }
 
 uint32_t HELPER(block_begin_event)()

@@ -117,6 +117,7 @@ void TLIB_NORETURN arch_raise_external_abort(CPUState *env, target_ulong address
 extern uint32_t maximum_block_size;
 
 //  translation block 정의
+//  SPARC 의 경우 target_ulong 이 4바이트로 정의되어 있다. (include/cpu-defs.h 참조)
 struct TranslationBlock {
     target_ulong pc;      /* simulated PC corresponding to this block (EIP + CS base) */
     target_ulong cs_base; /* CS base for this block */

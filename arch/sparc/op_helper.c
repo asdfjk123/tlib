@@ -154,7 +154,7 @@ void helper_check_align(target_ulong addr, uint32_t align)
         QT0 = float128_##name(QT0, QT1, &env->fp_status);   \
     }
 
-F_BINOP(add);
+F_BINOP(add);  //  softfloat-2.c 의 float32 float32_add(float32 a, float32 b STATUS_PARAM) 참조
 F_BINOP(sub);
 F_BINOP(mul);
 F_BINOP(div);
@@ -274,9 +274,10 @@ void helper_check_ieee_exceptions(void)
     }
 }
 
+//  float flag 초기화
 void helper_clear_float_exceptions(void)
 {
-    set_float_exception_flags(0, &env->fp_status);
+    set_float_exception_flags(0, &env->fp_status);  //  softfloat-2.c 참조
 }
 
 float32 helper_fabss(float32 src)

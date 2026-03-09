@@ -246,7 +246,7 @@ DATA_TYPE REGPARM glue(glue(__ld, SUFFIX), MMUSUFFIX)(target_ulong addr, int mmu
 {
     return glue(glue(glue(__ld, SUFFIX), _err), MMUSUFFIX)(addr, mmu_idx, NULL);
 }
-
+//  __ldl_mmu
 /* handle all unaligned cases */
 static DATA_TYPE glue(glue(glue(slow_ld, SUFFIX), _err), MMUSUFFIX)(target_ulong addr, int mmu_idx, void *retaddr, int *err)
 {
