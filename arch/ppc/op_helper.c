@@ -29,7 +29,7 @@
 
 void helper_raise_exception_err(uint32_t exception, uint32_t error_code)
 {
-    env->exception_index = exception;
+    env->exception_index = exception; // exception 번호 기록
     env->error_code = error_code;
     cpu_loop_exit(env);
 }

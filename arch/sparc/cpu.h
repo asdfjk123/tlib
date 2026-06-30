@@ -288,12 +288,12 @@ typedef struct SparcTLBEntry {
 //  | BEFORE >CPU_COMMON< SECTION.          |
 //  +---------------------------------------+
 typedef struct CPUState {
-    target_ulong gregs[8]; /* general registers */
-    target_ulong *regwptr; /* pointer to current register window */
-    target_ulong pc;       /* program counter */
-    target_ulong npc;      /* next program counter */
-    target_ulong y;        /* multiply/divide register */
-    target_ulong asr[16];  /* ancillary state registers 16-31 */
+    target_ulong gregs[8]; /* general registers */ /* g0 ~ g7 까지의 글로벌 레지스터 */
+    target_ulong *regwptr;                         /* pointer to current register window */
+    target_ulong pc;                               /* program counter */
+    target_ulong npc;                              /* next program counter */
+    target_ulong y;                                /* multiply/divide register */
+    target_ulong asr[16];                          /* ancillary state registers 16-31 */
 
     /* emulator internal flags handling */
     target_ulong cc_src, cc_src2;
@@ -369,7 +369,9 @@ void cpu_set_cwp(CPUState *env, int new_cwp);
 
 static inline int cpu_mmu_index(CPUState *env)
 {
-    return env->psrs;
+    // supervisor mode 여부를 파악해서, MMU_USER_IDX(0) 또는 MMU_KERNEL_IDX(1) 를 반환한다.
+    // 즉 인덱싱 방식이 달라진다.
+    return env->psrs; 
 }
 
 static inline int cpu_interrupts_enabled(CPUState *env)

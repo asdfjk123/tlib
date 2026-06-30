@@ -1494,6 +1494,37 @@ static int disas_insn(CPUState *env, DisasContext *dc)
      * ldl_code 는 tlib/include/softmmu_header.h 로부터 SUFFIX 와 MEMSUFFIX 를 통해 함수명이 매크로로 만들어진다.
      * 내부 구현은 glue() 를 통해서 만들어진다.
      */
+    
+    /*
+static inline uint32_t ldl_code(target_ulong ptr)
+{
+    return ldl_code_inner(ptr, ((void *)0));
+}
+static inline uint32_t ldl_code_inner(target_ulong ptr, void *retaddr)
+{
+    return ldl_err_code_inner(ptr, ((void *)0), retaddr);
+}
+static inline uint32_t ldl_err_code_inner(target_ulong ptr, int *err, void *retaddr)
+{
+    int page_index;
+    uint32_t res;
+    target_ulong addr;
+    uintptr_t physaddr;
+    int mmu_idx;
+    addr = ptr;
+    // softmmu 에서 제공하는 TLB 를 사용한다.
+    // 게스트 OS의 가상 주소를 호스트 시스템의 실제 물리적 주소로 변환한다.
+    page_index = (addr >> 12) & ((1 << 8) - 1); // pc 값을 참고해서 페이지 인덱스를 정한다.
+    mmu_idx = (cpu_mmu_index(cpu));
+    if((!!(cpu->tlb_table[mmu_idx][page_index].addr_code != (addr & (~((1ull << 12) - 1) | (4 - 1)))))) {
+        res = __inner_ldl_err_cmmu(addr, mmu_idx, err, retaddr);
+    } else {
+        physaddr = addr + cpu->tlb_table[mmu_idx][page_index].addend;
+        res = ldl_be_p((uint8_t *)(uintptr_t)((physaddr)));
+    }
+    return res;
+}
+     */
 
     //  여기서 1사이클 올린다.
     //  NOP 관련 명령어면 아무 것도 안하는 것과는 별개로, 사이클은 1 증가된다.

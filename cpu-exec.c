@@ -122,9 +122,12 @@ int tb_invalidated_flag;
 void TLIB_NORETURN cpu_loop_exit_without_hook(CPUState *env)
 {
     env->current_tb = NULL;
-    longjmp(env->jmp_env, 1);
+    longjmp(env->jmp_env, 1);  //  jmp_env 가 1 을 반환하도록 한 후 setjmp 로 점프
 }
 
+//  ta 0 같은 명령어로 heler_raise_exception 을 발생시키면 실행되는 함수
+//  exception 이 발생한 그 guest 명령어부터 재실행된다.
+//  e.g. ta 0 에서 exception 발생하면 ta 0 로 재실행
 void TLIB_NORETURN cpu_loop_exit(CPUState *env)
 {
     if(env->block_finished_hook_present) {
@@ -391,22 +394,22 @@ int cpu_exec(CPUState *env)
         on_cpu_has_work(env);
     }
 
-    cpu_exec_prologue(env);  //  프롤로그 함수 (비어 있음)
-    env->exception_index = -1;
+    cpu_exec_prologue(env);     //  프롤로그 함수 (비어 있음)
+    env->exception_index = -1;  //  exception index 초기화
 
     /* prepare setjmp context for exception handling */
     for(;;) {                        //  무한 루프 (Exception이 발생해 longjmp로 돌아오면 다시 여기서부터 재시작)
         unlock_dangling_locks(env);  //  메모리 공간에 대해, 필요없는 락이 걸려있는지 확인 후 해제시킨다.
-        //  setjmp는 처음 호출될 때 0을 반환하여 정상적인 실행 흐름을 타고,
-        //  이후 실행 도중 결함(fault)이나 강제 종료(cpu_loop_exit 등)가 발생해 longjmp를 호출하면
-        //  여기로 되돌아오며 0이 아닌 값을 반환하여 else 문파트로 빠져 env를 복구한 후 다음 번 루프를 돕니다.
+        //  longjmp 가 호출되면 여기로 돌아옴
+        //  정상적일 때는 0 이지만, ta 0 와 같이 trap 이 발생하면 1이 된다. 따라서 else 로 빠진다.
+        //  else 에서 손상되었을지도 모를 env 값을 다시 복구한 후 0 다시 for 문을 통해 반복 시작
         if(setjmp(env->jmp_env) == 0) {
             /* if an exception is pending, we execute it here */
-            //  [ 1. 루프 시작: 이전에 대기 상태였거나 금방 발생한(pending) 인터럽트/예외를 먼저 처리 ]
+            //  exception_index 가 0 이상 = 이전에 exception 이 발생했다 (e.g. ta 0 에 의해서라던지)
             if(env->exception_index >= 0) {
                 if(env->return_on_exception || env->exception_index >= EXCP_INTERRUPT) {  //  무시하면 안 될 인터럽트라면
                     /* exit request from the cpu execution loop */
-                    ret = env->exception_index;
+                    ret = env->exception_index;                      //  exception 번호를 return
                     if((ret == EXCP_DEBUG) && debug_excp_handler) {  //  필요하다면 디버깅
                         debug_excp_handler(env);
                     }
@@ -426,7 +429,7 @@ int cpu_exec(CPUState *env)
 
             //  번역 수행
             next_tb = 0; /* force lookup of first TB */
-            for(;;) {
+            for(;;) {    //  다음 블록 실행 시 여기부터 다시 시작
                 cpu_sync_instructions_count(env);
 
                 //  번역 수행 직전 다시 한 번 인터럽트 확인
