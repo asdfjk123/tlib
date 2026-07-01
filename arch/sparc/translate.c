@@ -684,6 +684,116 @@ static inline void gen_op_eval_be(TCGv dst, TCGv_i32 src)
     gen_mov_reg_Z(dst, src);
 }
 
+// gen_op_eval_be 내부 캡슐화된 함수를 모두 풀어보면 다음과 같다.
+// static inline void gen_op_eval_be_expanded(TCGv_i32 dst, TCGv_i32 src)
+// {
+//     /*
+//      * gen_mov_reg_Z(dst, src)
+//      * =
+//      *   dst = (uint32_t)src;
+//      *   dst = dst >> 22;
+//      *   dst = dst & 1;
+//      *
+//      * 아래는 helper 호출을 최대한 풀어서 TCG IR buffer에 직접 쓰는 형태.
+//      */
+//
+//     if (!(dst == src)) {
+//         *gen_opc_ptr++ = (TCGOpcodeEntry){ .opcode = INDEX_op_mov_i32 };
+//         *gen_opparam_ptr++ = dst;
+//         *gen_opparam_ptr++ = src;
+//     }
+//
+//     /*
+//      * tcg_const_i32(22)
+//      * -> temp 할당
+//      * -> movi_i32 temp, 22
+//      */
+//     TCGContext *s = tcg->ctx;
+//     TCGTemp *ts;
+//     int k;
+//     TCGv_i32 t0;
+//
+//     k = TCG_TYPE_I32;
+//     t0 = s->first_free_temp[k];
+//
+//     if (t0 != -1) {
+//         ts = &s->temps[t0];
+//         s->first_free_temp[k] = ts->next_free_temp;
+//         ts->temp_allocated = 1;
+//     } else {
+//         t0 = s->nb_temps;
+//         ts = &s->temps[s->nb_temps];
+//         ts->base_type = TCG_TYPE_I32;
+//         ts->type = TCG_TYPE_I32;
+//         ts->temp_allocated = 1;
+//         ts->temp_local = 0;
+//         ts->name = NULL;
+//         s->nb_temps++;
+//     }
+//
+//     *gen_opc_ptr++ = (TCGOpcodeEntry){ .opcode = INDEX_op_movi_i32 };
+//     *gen_opparam_ptr++ = t0;
+//     *gen_opparam_ptr++ = 22;
+//
+//     *gen_opc_ptr++ = (TCGOpcodeEntry){ .opcode = INDEX_op_shr_i32 };
+//     *gen_opparam_ptr++ = dst;
+//     *gen_opparam_ptr++ = dst;
+//     *gen_opparam_ptr++ = t0;
+//
+//     ts = &s->temps[t0];
+//     ts->temp_allocated = 0;
+//     k = ts->base_type;
+//     if (ts->temp_local) {
+//         k += TCG_TYPE_COUNT;
+//     }
+//     ts->next_free_temp = s->first_free_temp[k];
+//     s->first_free_temp[k] = t0;
+//
+//     /*
+//      * tcg_const_i32(1)
+//      * 보통 방금 free한 t0가 재사용된다.
+//      */
+//     TCGv_i32 t1;
+//
+//     k = TCG_TYPE_I32;
+//     t1 = s->first_free_temp[k];
+//
+//     if (t1 != -1) {
+//         ts = &s->temps[t1];
+//         s->first_free_temp[k] = ts->next_free_temp;
+//         ts->temp_allocated = 1;
+//     } else {
+//         t1 = s->nb_temps;
+//         ts = &s->temps[s->nb_temps];
+//         ts->base_type = TCG_TYPE_I32;
+//         ts->type = TCG_TYPE_I32;
+//         ts->temp_allocated = 1;
+//         ts->temp_local = 0;
+//         ts->name = NULL;
+//         s->nb_temps++;
+//     }
+//
+//     *gen_opc_ptr++ = (TCGOpcodeEntry){ .opcode = INDEX_op_movi_i32 };
+//     *gen_opparam_ptr++ = t1;
+//     *gen_opparam_ptr++ = 1;
+//
+//     if (!(dst == t1)) {
+//         *gen_opc_ptr++ = (TCGOpcodeEntry){ .opcode = INDEX_op_and_i32 };
+//         *gen_opparam_ptr++ = dst;
+//         *gen_opparam_ptr++ = dst;
+//         *gen_opparam_ptr++ = t1;
+//     }
+//
+//     ts = &s->temps[t1];
+//     ts->temp_allocated = 0;
+//     k = ts->base_type;
+//     if (ts->temp_local) {
+//         k += TCG_TYPE_COUNT;
+//     }
+//     ts->next_free_temp = s->first_free_temp[k];
+//     s->first_free_temp[k] = t1;
+// }
+
 //  Z | (N ^ V)
 static inline void gen_op_eval_ble(TCGv dst, TCGv_i32 src)
 {
@@ -1159,6 +1269,9 @@ static inline void gen_fcond(TCGv r_dst, unsigned int cc, unsigned int cond)
 }
 
 /* XXX: potentially incorrect if dynamic npc */
+// annul bit 정책에 따라 pc 값 처리하는 함수
+// unconditional, conditional 모두 포함
+// conditional 의 경우, gen_cond -> gen_op_eval_bX 라는 함수에서 조건 확인을 수행한다. 
 static void do_branch(DisasContext *dc, int32_t offset, uint32_t insn, int cc, TCGv r_cond)
 {
     unsigned int cond = GET_FIELD(insn, 3, 6), a = (insn & (1 << 29));
